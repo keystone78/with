@@ -1,0 +1,1699 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>WITH (위드) v2.3 - 행동특성 누가기록 & 상담 기록</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        html, body { overflow-x: hidden; }
+        body { font-family: 'Noto Sans KR', 'Inter', sans-serif; background-color: #f8fafc; color: #1e293b; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fadeIn { animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        /* 아이폰에서 입력칸을 누르면 화면이 확대되는 현상 방지 */
+        @media (max-width: 640px) {
+            input, select, textarea { font-size: 16px !important; }
+        }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+        /* 입력창: 화면 아래 배너(Netlify 등)에 가리지 않도록 아래쪽 여백을 넉넉히 둠 */
+        .modal-overlay { padding: 16px 12px calc(220px + env(safe-area-inset-bottom)); }
+        @media (min-width: 640px) { .modal-overlay { padding: 48px 16px 200px; } }
+
+        #print-area { display: none; }
+        #print-area table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        #print-area th, #print-area td { border: 1px solid #333; padding: 6px 8px; vertical-align: top; }
+        #print-area th { background: #f1f5f9; }
+        @media print {
+            @page { size: A4; margin: 15mm; }
+            body.printing > *:not(#print-area) { display: none !important; }
+            body.printing #print-area { display: block !important; }
+            body { background: white !important; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-800 antialiased selection:bg-indigo-100 selection:text-indigo-700">
+
+    <div id="fatal-banner" class="hidden bg-red-600 text-white text-xs font-bold px-4 py-3 text-center"></div>
+
+    <div id="app" class="flex-grow flex flex-col min-h-screen">
+        <!-- Header -->
+        <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2">
+                <div class="flex items-center space-x-2.5 sm:space-x-3 cursor-pointer min-w-0" onclick="appState.user && appState.navigateTo('dashboard')">
+                    <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-400 flex items-center justify-center text-white font-extrabold text-lg sm:text-xl shadow-md shadow-indigo-100 flex-shrink-0">W</div>
+                    <div class="flex items-center space-x-2 min-w-0">
+                        <span class="text-lg sm:text-xl font-black bg-gradient-to-r from-indigo-700 to-sky-600 bg-clip-text text-transparent tracking-tight">WITH</span>
+                        <span class="text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold border border-indigo-100">v2.3</span>
+                        <p class="text-xs text-slate-500 font-medium hidden lg:block border-l border-slate-200 pl-3 py-0.5 truncate">선생님의 시선이 아이의 마음과 닿는 공간, WITH</p>
+                    </div>
+                </div>
+
+                <div id="main-nav" class="hidden items-center space-x-1 sm:space-x-2 flex-shrink-0">
+                    <button id="nav-btn-students" onclick="appState.navigateTo('students')" class="hidden sm:flex px-2.5 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-indigo-600 hover:bg-slate-50 transition items-center space-x-1.5">
+                        <i data-lucide="users" class="w-4 h-4"></i><span class="hidden md:inline">학생 명단</span>
+                    </button>
+                    <button id="nav-btn-behavior" onclick="appState.navigateTo('behavior')" class="hidden sm:flex px-2.5 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-indigo-600 hover:bg-slate-50 transition items-center space-x-1.5">
+                        <i data-lucide="clipboard-list" class="w-4 h-4"></i><span class="hidden md:inline">행동특성 누가기록</span>
+                    </button>
+                    <button id="nav-btn-counseling" onclick="appState.navigateTo('counseling')" class="hidden sm:flex px-2.5 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-indigo-600 hover:bg-slate-50 transition items-center space-x-1.5">
+                        <i data-lucide="message-square" class="w-4 h-4"></i><span class="hidden md:inline">상담 기록</span>
+                    </button>
+                    <div class="hidden sm:block h-4 w-px bg-slate-200 mx-1"></div>
+                    <button onclick="appState.openAdminModal()" class="px-2.5 sm:px-3 py-2 rounded-lg text-xs sm:text-sm font-bold bg-slate-800 text-white hover:bg-slate-700 transition flex items-center space-x-1.5 shadow-sm">
+                        <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i><span id="admin-btn-label" class="hidden sm:inline">관리자</span>
+                    </button>
+                    <button onclick="appState.logout()" title="로그아웃" class="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition flex items-center space-x-1">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                        <span id="user-email" class="hidden xl:inline text-[11px] font-semibold max-w-[160px] truncate"></span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-grow max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-48 sm:pb-40">
+
+            <!-- View 0: Login -->
+            <section id="view-login" class="flex items-center justify-center py-10 sm:py-16 animate-fadeIn">
+                <div class="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm max-w-sm w-full text-center space-y-5">
+                    <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-400 flex items-center justify-center text-white font-extrabold text-2xl shadow-md">W</div>
+                    <div>
+                        <h1 class="text-lg font-bold text-slate-900">WITH에 로그인</h1>
+                        <p class="text-xs text-slate-500 mt-1">행동특성 누가기록 · 상담 기록 관리</p>
+                    </div>
+                    <div id="login-status" class="text-xs font-semibold text-slate-500">Firebase에 연결하는 중…</div>
+                    <button id="login-btn" onclick="appState.login()" class="hidden w-full py-3 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl text-sm font-bold text-slate-700 transition flex items-center justify-center space-x-2 shadow-sm">
+                        <svg class="w-5 h-5" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+                        <span>Google 계정으로 로그인</span>
+                    </button>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">기록은 로그인한 계정의 공간에만 저장되며<br>다른 계정에서는 볼 수 없습니다.</p>
+                </div>
+            </section>
+
+            <!-- View 1: Dashboard -->
+            <section id="view-dashboard" class="hidden space-y-4 sm:space-y-6 animate-fadeIn">
+                <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="p-2.5 sm:p-3 bg-indigo-50 text-indigo-600 rounded-xl"><i data-lucide="layout-dashboard" class="w-5 h-5 sm:w-6 sm:h-6"></i></div>
+                        <div class="min-w-0">
+                            <h1 class="text-lg sm:text-xl font-bold text-slate-900">학급 통합 대시보드</h1>
+                            <p id="dashboard-class-label" class="text-xs text-slate-500 mt-0.5 truncate">1학년 1반</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 md:flex md:items-center gap-2">
+                        <button onclick="appState.navigateTo('students')" class="px-3.5 py-2.5 md:py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-xs transition flex items-center justify-center space-x-1.5 shadow-sm">
+                            <i data-lucide="user-plus" class="w-4 h-4"></i><span>명단 등록/수정</span>
+                        </button>
+                        <button onclick="appState.openAdminModal()" class="px-3.5 py-2.5 md:py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition flex items-center justify-center space-x-1.5">
+                            <i data-lucide="download" class="w-4 h-4 text-emerald-600"></i><span>엑셀 내보내기</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                    <div onclick="appState.navigateTo('behavior')" class="group bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                                <div class="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-105 transition-transform"><i data-lucide="clipboard-list" class="w-6 h-6"></i></div>
+                                <span class="text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700">YYYY.MM.DD. 형식</span>
+                            </div>
+                            <h2 class="text-base sm:text-lg font-bold text-slate-900 group-hover:text-indigo-600 transition">행동특성 누가기록</h2>
+                            <p class="text-slate-500 text-xs leading-relaxed mt-1 mb-4">달력으로 관찰일자를 고르면 나이스 형식(YYYY.MM.DD.)으로 저장됩니다. 일괄/개별 등록과 학생별 출력을 지원합니다.</p>
+                        </div>
+                        <div class="flex items-center text-xs font-bold text-indigo-600 pt-3 border-t border-slate-100">
+                            <span>기록 작성 및 보기</span><i data-lucide="arrow-right" class="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </div>
+
+                    <div onclick="appState.navigateTo('counseling')" class="group bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-sky-300 transition-all cursor-pointer flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                                <div class="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center group-hover:scale-105 transition-transform"><i data-lucide="message-square" class="w-6 h-6"></i></div>
+                                <span class="text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-full bg-sky-50 text-sky-700">나이스 업로드 서식</span>
+                            </div>
+                            <h2 class="text-base sm:text-lg font-bold text-slate-900 group-hover:text-sky-600 transition">상담 기록</h2>
+                            <p class="text-slate-500 text-xs leading-relaxed mt-1 mb-4">나이스 상담관리 업로드 서식의 16개 열을 모두 기록하고, 서식 그대로 엑셀로 내보냅니다.</p>
+                        </div>
+                        <div class="flex items-center text-xs font-bold text-sky-600 pt-3 border-t border-slate-100">
+                            <span>상담 기록 관리</span><i data-lucide="arrow-right" class="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl p-4 sm:p-6 border border-slate-200/80 shadow-sm space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
+                        <div>
+                            <h3 class="text-base font-bold text-slate-800">학급 학생 요약 현황</h3>
+                            <p class="text-xs text-slate-400">학생 카드를 누르면 해당 학생의 누가기록 화면으로 이동합니다.</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <span id="stat-student-count" class="px-2.5 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-lg">학생: 0명</span>
+                            <span id="stat-behavior-count" class="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-lg">행특: 0건</span>
+                            <span id="stat-counsel-count" class="px-2.5 py-1 bg-sky-50 text-sky-700 text-xs font-bold rounded-lg">상담: 0건</span>
+                        </div>
+                    </div>
+                    <div id="quick-student-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2"></div>
+                </div>
+            </section>
+
+            <!-- View 2: Students -->
+            <section id="view-students" class="hidden space-y-4 sm:space-y-6 animate-fadeIn">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                    <div>
+                        <h2 class="text-lg sm:text-xl font-bold text-slate-900 flex items-center space-x-2">
+                            <i data-lucide="users" class="w-6 h-6 text-indigo-600"></i><span>학급 학생 명단 관리</span>
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-1">엑셀 업로드 시 명단을 <b>덮어씁니다</b>. 이름이 같은 학생은 기존 기록이 유지되고, 새 명단에 없는 학생은 확인 후 삭제됩니다.</p>
+                        <p class="text-[11px] text-slate-400 mt-0.5">엑셀에는 '번호', '성명(또는 이름)', '성별' 열이 있어야 합니다.</p>
+                    </div>
+                    <div class="grid grid-cols-2 lg:flex lg:items-center gap-2">
+                        <label class="px-3.5 py-2.5 lg:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition cursor-pointer flex items-center justify-center space-x-1.5 shadow-sm">
+                            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i><span>명단 엑셀 업로드</span>
+                            <input type="file" accept=".xlsx, .xls, .csv" class="hidden" onchange="appState.handleRosterExcelUpload(event)">
+                        </label>
+                        <button onclick="appState.addStudentRow()" class="px-3.5 py-2.5 lg:py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition flex items-center justify-center space-x-1.5 shadow-sm">
+                            <i data-lucide="user-plus" class="w-4 h-4"></i><span>학생 직접 추가</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                    <div class="hidden md:grid md:grid-cols-[80px_1fr_100px_230px_70px] bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500">
+                        <div class="py-3 px-4 text-center">번호</div>
+                        <div class="py-3 px-4">성명</div>
+                        <div class="py-3 px-4">성별</div>
+                        <div class="py-3 px-4 text-center">기록 건수</div>
+                        <div class="py-3 px-4 text-center">관리</div>
+                    </div>
+                    <div id="student-list" class="divide-y divide-slate-100 text-sm"></div>
+                </div>
+            </section>
+
+            <!-- View 3: Behavior -->
+            <section id="view-behavior" class="hidden space-y-4 sm:space-y-6 animate-fadeIn">
+                <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0"><i data-lucide="clipboard-list" class="w-5 h-5"></i></div>
+                            <div>
+                                <h2 class="text-lg sm:text-xl font-bold text-slate-900">행동특성 누가기록</h2>
+                                <p class="text-xs text-slate-500">추가·수정·삭제 후 <b>저장</b>을 눌러야 반영됩니다. 저장 시 일자순으로 정렬됩니다.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 w-full md:w-auto">
+                            <label class="text-xs font-bold text-slate-600 pl-2 whitespace-nowrap">학생</label>
+                            <select id="behavior-student-select" onchange="appState.changeBehaviorStudent(this.value)" class="flex-1 md:flex-none bg-white border border-slate-300 rounded-lg py-1.5 px-3 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none md:min-w-[160px]"></select>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between pt-3 border-t border-slate-100 gap-3">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span id="behavior-active-title" class="text-sm sm:text-base font-bold text-slate-800">학생을 선택하세요</span>
+                            <span id="behavior-log-total" class="text-xs font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md">Total 0</span>
+                            <span id="behavior-dirty" class="hidden text-xs font-bold bg-amber-100 text-amber-700 px-2.5 py-1 rounded-md">저장 안 됨</span>
+                        </div>
+                        <div class="grid grid-cols-3 sm:flex sm:flex-wrap items-center gap-1.5">
+                            <button onclick="appState.openBulkBehaviorModal()" class="px-3 py-2 sm:py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1 shadow-sm"><i data-lucide="layers" class="w-3.5 h-3.5"></i><span>일괄등록</span></button>
+                            <button onclick="appState.addBehaviorLogRow()" class="px-3 py-2 sm:py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1 shadow-sm"><i data-lucide="plus" class="w-3.5 h-3.5"></i><span>행추가</span></button>
+                            <button onclick="appState.saveBehaviorLogs()" class="px-3 py-2 sm:py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1 shadow-sm"><i data-lucide="save" class="w-3.5 h-3.5"></i><span>저장</span></button>
+                            <button onclick="appState.deleteSelectedBehaviorLogs()" class="px-3 py-2 sm:py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1 shadow-sm"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i><span>선택삭제</span></button>
+                            <button onclick="appState.revertBehaviorLogs()" class="px-3 py-2 sm:py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1"><i data-lucide="undo-2" class="w-3.5 h-3.5"></i><span>되돌리기</span></button>
+                            <button onclick="appState.printStudentBehaviorLog()" class="px-3 py-2 sm:py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1 shadow-sm"><i data-lucide="printer" class="w-3.5 h-3.5"></i><span>출력</span></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                    <div class="hidden md:grid md:grid-cols-[48px_60px_180px_1fr] bg-slate-100/80 border-b border-slate-200 text-xs font-bold text-slate-700">
+                        <div class="py-3 px-3 text-center"><input type="checkbox" id="behavior-check-all" onchange="appState.toggleAllBehaviorChecks(this.checked)" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"></div>
+                        <div class="py-3 px-3 text-center text-slate-600">순번</div>
+                        <div class="py-3 px-3 text-red-600 font-extrabold">*일자</div>
+                        <div class="py-3 px-3 text-red-600 font-extrabold">*행동특성내용</div>
+                    </div>
+                    <div class="md:hidden flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600">
+                        <label class="flex items-center gap-2"><input type="checkbox" id="behavior-check-all-m" onchange="appState.toggleAllBehaviorChecks(this.checked)" class="rounded border-slate-300 text-indigo-600 w-4 h-4"> 전체 선택</label>
+                        <span class="text-red-600">*일자 · *내용 필수</span>
+                    </div>
+                    <div id="behavior-list" class="divide-y divide-slate-100 text-sm"></div>
+                </div>
+            </section>
+
+            <!-- View 4: Counseling -->
+            <section id="view-counseling" class="hidden space-y-4 sm:space-y-6 animate-fadeIn">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                    <div class="flex items-start sm:items-center space-x-3">
+                        <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center flex-shrink-0"><i data-lucide="message-square" class="w-5 h-5"></i></div>
+                        <div>
+                            <h2 class="text-lg sm:text-xl font-bold text-slate-900">상담 기록</h2>
+                            <p class="text-xs text-slate-500">나이스 상담관리 업로드 서식의 16개 열을 그대로 기록합니다.</p>
+                            <p class="text-[11px] text-slate-400 mt-0.5">고정값: 일반상담 · Wee클래스 일반 · 대분류 상담 · 상담사소속 교사</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 lg:flex lg:items-center gap-2">
+                        <label class="px-3.5 py-2.5 lg:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition cursor-pointer flex items-center justify-center space-x-1.5 shadow-sm">
+                            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i><span>상담 엑셀 업로드</span>
+                            <input type="file" accept=".xlsx, .xls, .csv" class="hidden" onchange="appState.handleCounselingExcelUpload(event)">
+                        </label>
+                        <button onclick="appState.openCounselingModal()" class="px-3.5 py-2.5 lg:py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-bold text-xs transition flex items-center justify-center space-x-1.5 shadow-sm">
+                            <i data-lucide="plus" class="w-4 h-4"></i><span>상담 기록 작성</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white p-3 sm:p-4 rounded-xl border border-slate-200/80 shadow-sm grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2 sm:gap-3 text-xs">
+                    <span class="hidden sm:inline font-bold text-slate-600">필터:</span>
+                    <select id="counsel-filter-student" onchange="appState.renderCounselingLogs()" class="col-span-2 sm:col-span-1 bg-slate-50 border border-slate-300 rounded-lg py-1.5 px-3 text-slate-700 font-bold min-w-0">
+                        <option value="ALL">전체 학생</option>
+                    </select>
+                    <select id="counsel-filter-mid" onchange="appState.onFilterMidChange()" class="bg-slate-50 border border-slate-300 rounded-lg py-1.5 px-3 text-slate-700 font-bold min-w-0"></select>
+                    <select id="counsel-filter-type" onchange="appState.renderCounselingLogs()" class="bg-slate-50 border border-slate-300 rounded-lg py-1.5 px-3 text-slate-700 font-bold min-w-0">
+                        <option value="ALL">전체 상담구분</option>
+                    </select>
+                    <span id="counsel-log-count" class="col-span-2 sm:ml-auto font-bold text-slate-500">총 0건의 상담 기록</span>
+                </div>
+
+                <!-- 데스크톱: 표 -->
+                <div class="hidden lg:block bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 font-bold text-slate-500">
+                                <th class="py-3 px-3 w-24">상담일자</th>
+                                <th class="py-3 px-3 w-16">학년도</th>
+                                <th class="py-3 px-3 w-28">학생</th>
+                                <th class="py-3 px-3 w-24">중분류</th>
+                                <th class="py-3 px-3 w-28">상담구분</th>
+                                <th class="py-3 px-3 w-44">상담제목</th>
+                                <th class="py-3 px-3">상담내용</th>
+                                <th class="py-3 px-3 w-20">매체</th>
+                                <th class="py-3 px-3 w-20">시간</th>
+                                <th class="py-3 px-3 w-20 text-center">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="counseling-table-body" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+                <!-- 모바일/태블릿: 카드 -->
+                <div id="counseling-card-list" class="lg:hidden space-y-3"></div>
+            </section>
+        </main>
+
+        <footer class="hidden sm:block bg-white border-t border-slate-200 mt-auto py-5">
+            <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400 space-y-1">
+                <p><span class="font-extrabold text-slate-600">WITH v2.3</span> - Wisdom & Insight for Teacher's Helper</p>
+                <p>행동특성 누가기록 & 상담 기록 관리</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- 모바일 하단 탭 -->
+    <nav id="mobile-nav" class="hidden sm:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 shadow-[0_-2px_10px_rgba(0,0,0,0.04)] safe-bottom">
+        <div class="grid grid-cols-4">
+            <button id="mnav-dashboard" onclick="appState.navigateTo('dashboard')" class="py-2 flex flex-col items-center gap-0.5 text-[11px] font-bold text-slate-500"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span>홈</span></button>
+            <button id="mnav-students" onclick="appState.navigateTo('students')" class="py-2 flex flex-col items-center gap-0.5 text-[11px] font-bold text-slate-500"><i data-lucide="users" class="w-5 h-5"></i><span>명단</span></button>
+            <button id="mnav-behavior" onclick="appState.navigateTo('behavior')" class="py-2 flex flex-col items-center gap-0.5 text-[11px] font-bold text-slate-500"><i data-lucide="clipboard-list" class="w-5 h-5"></i><span>누가기록</span></button>
+            <button id="mnav-counseling" onclick="appState.navigateTo('counseling')" class="py-2 flex flex-col items-center gap-0.5 text-[11px] font-bold text-slate-500"><i data-lucide="message-square" class="w-5 h-5"></i><span>상담</span></button>
+        </div>
+    </nav>
+
+    <!-- MODAL 1: Admin -->
+    <div id="modal-admin" class="modal-overlay fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm overflow-y-auto overscroll-contain hidden">
+        <div class="modal-panel bg-white rounded-2xl max-w-md w-full mx-auto p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-5 animate-fadeIn">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center space-x-2">
+                    <div class="p-2 bg-slate-900 text-emerald-400 rounded-xl"><i data-lucide="shield-check" class="w-5 h-5"></i></div>
+                    <h3 class="font-bold text-base text-slate-800">관리자 설정</h3>
+                </div>
+                <button onclick="appState.closeAdminModal()" class="p-1 text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <div id="admin-lock-screen" class="space-y-4">
+                <p class="text-xs text-slate-500 leading-relaxed">
+                    엑셀 내보내기와 학급 설정은 관리자 비밀번호로 한 번 더 잠겨 있습니다.<br>
+                    <span id="admin-default-hint" class="text-indigo-600 font-bold">(초기 비밀번호: 1234 — 꼭 변경하세요)</span>
+                </p>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">관리자 비밀번호</label>
+                    <input type="password" id="admin-password-input" placeholder="비밀번호 입력" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none font-semibold">
+                </div>
+                <button onclick="appState.verifyAdminPassword()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-sm transition shadow">관리자 인증하기</button>
+            </div>
+
+            <div id="admin-unlocked-screen" class="space-y-4 hidden">
+                <div class="p-3 bg-emerald-50 text-emerald-800 text-xs rounded-xl border border-emerald-100 flex items-center justify-between">
+                    <div class="flex items-center space-x-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i><span class="font-bold">관리자 인증됨</span></div>
+                    <button onclick="appState.lockAdminSession()" class="text-[11px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-lg hover:bg-slate-100 transition">잠금</button>
+                </div>
+
+                <div class="space-y-2">
+                    <h4 class="text-xs font-bold text-slate-700">학급 설정</h4>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <label class="block font-bold text-slate-500 mb-1">학년</label>
+                            <input type="number" min="1" max="6" id="setting-grade" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-500 mb-1">반</label>
+                            <input type="number" min="1" id="setting-ban" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold">
+                        </div>
+                    </div>
+                    <button onclick="appState.saveSettings()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition">설정 저장</button>
+                </div>
+
+                <div class="space-y-2 pt-2 border-t border-slate-100">
+                    <h4 class="text-xs font-bold text-slate-700">엑셀 내보내기</h4>
+                    <div class="flex items-center gap-2 text-xs">
+                        <label class="font-bold text-slate-500 whitespace-nowrap">내보낼 학년도</label>
+                        <select id="export-school-year" class="flex-1 p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold"></select>
+                    </div>
+                    <button onclick="appState.exportNEISCounselingExcel()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition flex items-center justify-center space-x-2 shadow-md">
+                        <i data-lucide="download" class="w-4 h-4"></i><span>상담 기록 – 나이스 업로드 서식 (.xlsx)</span>
+                    </button>
+                    <button onclick="appState.exportBehaviorExcel()" class="w-full py-2.5 bg-white border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-bold rounded-xl text-xs transition flex items-center justify-center space-x-2">
+                        <i data-lucide="download" class="w-4 h-4"></i><span>행동특성 누가기록 전체 (.xlsx)</span>
+                    </button>
+                    <p class="text-[11px] text-slate-400 text-center">처음에는 1~2건만 나이스에 시험 업로드해서 확인해 보세요.</p>
+                </div>
+
+                <div class="border-t border-slate-100 pt-3 space-y-2">
+                    <button onclick="document.getElementById('pwd-change-box').classList.toggle('hidden')" class="text-xs font-bold text-indigo-600 hover:underline flex items-center space-x-1">
+                        <i data-lucide="key-round" class="w-3.5 h-3.5"></i><span>관리자 비밀번호 변경</span>
+                    </button>
+                    <div id="pwd-change-box" class="hidden p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+                        <div>
+                            <label class="block font-bold text-slate-600 mb-1">새 비밀번호 (4자 이상)</label>
+                            <input type="password" id="new-pwd-input" class="w-full p-2 bg-white border border-slate-300 rounded-lg">
+                        </div>
+                        <button onclick="appState.changeAdminPassword()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition">비밀번호 변경 저장</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: Bulk Behavior -->
+    <div id="modal-bulk-behavior" class="modal-overlay fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm overflow-y-auto overscroll-contain hidden">
+        <div class="modal-panel bg-white rounded-2xl max-w-lg w-full mx-auto p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-4 animate-fadeIn">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-base text-slate-800 flex items-center space-x-2"><i data-lucide="layers" class="w-5 h-5 text-indigo-600"></i><span>누가기록 일괄 등록</span></h3>
+                <div class="flex items-center gap-1">
+                    <button onclick="appState.applyBulkBehaviorLog()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition flex items-center gap-1"><i data-lucide="save" class="w-3.5 h-3.5"></i>저장</button>
+                    <button onclick="appState.closeBulkBehaviorModal()" class="p-1 text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">관찰 일자 (*)</label>
+                    <input type="date" id="bulk-behavior-date" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">행동특성 관찰내용 (*)</label>
+                    <textarea id="bulk-behavior-content" rows="3" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium" placeholder="행동특성 및 관찰내용 입력"></textarea>
+                </div>
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-xs font-bold text-slate-700">적용 학생 선택 (*)</label>
+                        <button type="button" onclick="appState.toggleBulkAllStudents()" class="text-xs text-indigo-600 font-bold hover:underline">전체 선택/해제</button>
+                    </div>
+                    <div id="bulk-student-checkboxes" class="max-h-48 overflow-y-auto border border-slate-200 rounded-xl p-3 bg-slate-50 grid grid-cols-2 gap-2 text-xs"></div>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 sm:flex sm:justify-end gap-2 pt-2">
+                <button onclick="appState.closeBulkBehaviorModal()" class="px-4 py-2.5 sm:py-2 bg-slate-100 text-slate-600 font-bold rounded-xl text-xs">취소</button>
+                <button onclick="appState.applyBulkBehaviorLog()" class="px-4 py-2.5 sm:py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition">일괄 저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: Counseling (나이스 업로드 서식 16개 열) -->
+    <div id="modal-counseling" class="modal-overlay fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm overflow-y-auto overscroll-contain hidden">
+        <div class="modal-panel bg-white rounded-2xl max-w-2xl w-full mx-auto p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-4 animate-fadeIn">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-base text-slate-800 flex items-center space-x-2"><i data-lucide="message-square" class="w-5 h-5 text-sky-600"></i><span id="counsel-modal-title">상담 기록 작성</span></h3>
+                <div class="flex items-center gap-1">
+                    <button onclick="appState.saveCounselingLog()" class="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg text-xs transition flex items-center gap-1"><i data-lucide="save" class="w-3.5 h-3.5"></i>저장</button>
+                    <button onclick="appState.closeCounselingModal()" class="p-1 text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
+            </div>
+
+            <!-- 고정값 -->
+            <div class="flex flex-wrap gap-1.5 text-[11px]">
+                <span class="px-2 py-1 rounded-lg bg-slate-100 text-slate-500 font-bold">상담분류 <b class="text-slate-700">일반상담</b></span>
+                <span class="px-2 py-1 rounded-lg bg-slate-100 text-slate-500 font-bold">Wee클래스 <b class="text-slate-700">일반</b></span>
+                <span class="px-2 py-1 rounded-lg bg-slate-100 text-slate-500 font-bold">대분류 <b class="text-slate-700">상담</b></span>
+                <span class="px-2 py-1 rounded-lg bg-slate-100 text-slate-500 font-bold">상담사소속 <b class="text-slate-700">교사</b></span>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div class="col-span-2">
+                    <label class="block font-bold text-slate-700 mb-1">학생 <span class="font-medium text-slate-400">(앱 관리용, 나이스 서식에는 없음)</span></label>
+                    <select id="counsel-modal-student" onchange="appState.onCounselStudentChange()" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold text-slate-800"></select>
+                </div>
+                <div class="col-span-2 sm:col-span-1">
+                    <label class="block font-bold text-red-600 mb-1">*상담일자</label>
+                    <input type="date" id="counsel-modal-date" onchange="appState.updateSchoolYearDisplay()" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold text-slate-800">
+                </div>
+                <div class="col-span-2 sm:col-span-1">
+                    <label class="block font-bold text-red-600 mb-1">*학년도 <span class="font-medium text-slate-400">(자동)</span></label>
+                    <input type="text" id="counsel-modal-year" disabled class="w-full bg-slate-100 border border-slate-200 rounded-xl p-2 font-bold text-slate-600 cursor-not-allowed">
+                </div>
+
+                <div class="col-span-1">
+                    <label class="block font-bold text-red-600 mb-1">*중분류</label>
+                    <select id="counsel-modal-mid" onchange="appState.onCounselMidChange()" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-semibold"></select>
+                </div>
+                <div class="col-span-1 sm:col-span-2">
+                    <label class="block font-bold text-red-600 mb-1">*상담구분</label>
+                    <select id="counsel-modal-type" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-semibold"></select>
+                </div>
+                <div class="col-span-2 sm:col-span-1">
+                    <label class="block font-bold text-red-600 mb-1">*상담매체구분</label>
+                    <select id="counsel-modal-medium" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-semibold"></select>
+                </div>
+
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">학년</label>
+                    <select id="counsel-modal-grade" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-semibold"></select>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">성별</label>
+                    <select id="counsel-modal-gender" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-semibold"></select>
+                </div>
+                <div>
+                    <label class="block font-bold text-red-600 mb-1">*상담인원</label>
+                    <input type="number" id="counsel-modal-headcount" min="1" value="1" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-semibold">
+                </div>
+                <div>
+                    <label class="block font-bold text-red-600 mb-1">*상담시간</label>
+                    <div class="flex items-center gap-1">
+                        <input type="number" id="counsel-modal-hours" min="0" max="23" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-semibold text-center">
+                        <span class="text-slate-500 font-bold">시</span>
+                        <input type="number" id="counsel-modal-minutes" min="0" max="59" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-semibold text-center">
+                        <span class="text-slate-500 font-bold">분</span>
+                    </div>
+                </div>
+
+                <div class="col-span-2 sm:col-span-4">
+                    <label class="block font-bold text-red-600 mb-1">*상담제목</label>
+                    <input type="text" id="counsel-modal-subject" maxlength="100" placeholder="예: 친구 관계 고민 상담" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-semibold">
+                </div>
+                <div class="col-span-2 sm:col-span-4">
+                    <label class="block font-bold text-red-600 mb-1">*상담내용</label>
+                    <textarea id="counsel-modal-content" rows="5" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-medium" placeholder="상담 세부 대화 및 관찰 내용을 입력하세요."></textarea>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 sm:flex sm:justify-end gap-2 pt-1">
+                <button onclick="appState.closeCounselingModal()" class="px-4 py-2.5 sm:py-2 bg-slate-100 text-slate-600 font-bold rounded-xl text-xs">취소</button>
+                <button onclick="appState.saveCounselingLog()" class="px-4 py-2.5 sm:py-2 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl text-xs transition">저장하기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-20 sm:bottom-5 left-4 right-4 sm:left-auto sm:right-5 z-50 bg-slate-800 text-white px-4 py-3 rounded-xl shadow-xl text-xs font-semibold flex items-center transition-all transform translate-y-20 opacity-0 pointer-events-none sm:max-w-sm">
+        <span id="toast-message">알림 메시지</span>
+    </div>
+
+    <div id="print-area"></div>
+
+    <script type="module">
+        /* =========================================================
+         * 1. Firebase 설정
+         * ========================================================= */
+        const firebaseConfig = {
+            apiKey: "AIzaSyAvTkyX2uWfV8tsRTrIrpmqcGc54NOJ0rw",
+            authDomain: "with-d2fbc.firebaseapp.com",
+            projectId: "with-d2fbc",
+            storageBucket: "with-d2fbc.firebasestorage.app",
+            messagingSenderId: "67771813116",
+            appId: "1:67771813116:web:6fb1a05e1f75c1c3525b79",
+            measurementId: "G-BJLTFKT7JS"
+        };
+        const FIREBASE_VERSION = '11.6.1';
+
+        let fbApp, fbAuth, fbFs, auth, db;
+
+        /* =========================================================
+         * 2. 나이스 상담관리 업로드 서식 정의 (첨부 서식의 '참조' 시트 기준)
+         * ========================================================= */
+        const NEIS = {
+            counselCategory: '일반상담',   // 고정
+            weeClass: '일반',             // 고정 (일반상담일 때 '일반'만 가능)
+            mainCategory: '상담',         // 고정
+            // 대분류 '상담'의 중분류와, 중분류별 상담구분 (서식 '참조' 시트)
+            mids: ['개인상담', '학부모상담', '집단상담'],
+            typesByMid: {
+                '개인상담': ['학업', '진로', '성격', '성', '대인관계', '가정 및 가족관계', '일탈 및 비행', '학교폭력 가해', '학교폭력 피해', '자해 및 자살', '정신건강', '컴퓨터 및 스마트폰 과사용', '정보제공', '기타'],
+                '학부모상담': ['학생관련상담', '교사관련상담', '학습', '기타'],
+                '집단상담': ['학업', '진로', '학교폭력', '성격/대인관계', '기타']
+            },
+            counselor: '교사',            // 고정 (일반상담일 때 '교사'만 가능)
+            grades: ['해당없음', '1학년', '2학년', '3학년', '4학년', '5학년', '6학년', '혼합'],
+            genders: ['남', '여', '혼성'],
+            media: ['면담', '전화상담', '사이버상담']
+        };
+        const NEIS_HEADERS = ['*상담분류', '*Wee클래스', '*대분류', '*중분류', '*상담구분', '*상담인원', '*학년도', '*상담일자', '학년', '성별', '*상담제목', '*상담내용', '*상담시간(시)', '*상담시간(분)', '*상담사소속', '*상담매체구분'];
+
+        // 이전 버전(v2.1) 데이터 변환용
+        const LEGACY_TYPE = { '교우관계': '대인관계', '학업/진로': '학업', '정서/행동': '정신건강', '가정환경': '가정 및 가족관계', '규칙준수': '일탈 및 비행' };
+        const LEGACY_MEDIUM = { '대면상담': '면담', '전화상담': '전화상담', '화상상담': '사이버상담', '모바일메신저': '사이버상담' };
+
+        /* =========================================================
+         * 3. 공통 도우미 함수
+         * ========================================================= */
+        const $ = (id) => document.getElementById(id);
+        const icons = () => { try { if (window.lucide) window.lucide.createIcons(); } catch (e) {} };
+        const pad2 = (n) => String(n).padStart(2, '0');
+        const options = (arr) => arr.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+
+        function esc(v) {
+            return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function todayISO() {
+            const d = new Date();
+            return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+        }
+
+        // 학년도: 3월 1일 시작. 1~2월 기록은 전년도 학년도로 계산
+        function schoolYearOf(iso) {
+            const m = String(iso || '').match(/^(\d{4})-(\d{2})/);
+            if (!m) { const d = new Date(); return d.getMonth() + 1 >= 3 ? d.getFullYear() : d.getFullYear() - 1; }
+            const y = Number(m[1]), mo = Number(m[2]);
+            return mo >= 3 ? y : y - 1;
+        }
+
+        function gradeLabel(g) {
+            const n = Number(g);
+            return n >= 1 && n <= 6 ? `${n}학년` : '해당없음';
+        }
+
+        function newId(prefix) {
+            return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+        }
+
+        function isoToNeis(iso) {
+            if (!iso) return '';
+            const p = String(iso).split('-');
+            if (p.length !== 3) return iso;
+            return `${p[0]}.${pad2(p[1])}.${pad2(p[2])}.`;
+        }
+
+        function neisToIso(s) {
+            if (!s) return '';
+            const p = String(s).split(/[.\-/]/).map(x => x.trim()).filter(Boolean);
+            if (p.length >= 3) return `${p[0]}-${pad2(p[1])}-${pad2(p[2])}`;
+            return '';
+        }
+
+        // 엑셀 셀 값 -> YYYY-MM-DD  (20261017 숫자, 날짜 일련번호, '2026-10-17' 등 모두 처리)
+        function excelDateToISO(v) {
+            if (v === null || v === undefined || v === '') return '';
+            if (typeof v === 'number') {
+                if (v >= 19000101 && v <= 29991231) {
+                    const s = String(Math.trunc(v));
+                    return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+                }
+                const p = XLSX.SSF.parse_date_code(v);
+                if (p && p.y) return `${p.y}-${pad2(p.m)}-${pad2(p.d)}`;
+                return '';
+            }
+            const s = String(v).trim();
+            let m = s.match(/^(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+            if (m) return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
+            m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+            if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+            return '';
+        }
+
+        // 머리글 행 자동 탐색 + '*' 및 공백 제거
+        function sheetToObjects(sheet, headerKeys) {
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
+            const norm = (c) => String(c).replace(/[\s*]/g, '');
+            const hIdx = rows.findIndex(r => r.some(c => headerKeys.includes(norm(c))));
+            if (hIdx < 0) return null;
+            const headers = rows[hIdx].map(norm);
+            return rows.slice(hIdx + 1)
+                .filter(r => r.some(c => String(c).trim() !== ''))
+                .map(r => {
+                    const o = {};
+                    headers.forEach((h, i) => { if (h) o[h] = r[i]; });
+                    return o;
+                });
+        }
+
+        async function sha256(text) {
+            const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+            return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function showFatal(msg) {
+            const el = $('fatal-banner');
+            el.textContent = msg;
+            el.classList.remove('hidden');
+        }
+
+        function minutesLabel(h, m) {
+            const hh = Number(h) || 0, mm = Number(m) || 0;
+            return `${hh ? hh + '시간 ' : ''}${mm}분`;
+        }
+
+        /* =========================================================
+         * 4. 앱 상태 및 기능
+         * ========================================================= */
+        window.appState = {
+            user: null,
+            currentView: 'dashboard',
+            students: [],
+            behaviorLogs: [],
+            counselingLogs: [],
+            settings: { grade: 1, ban: 1, adminPwHash: null },
+            isAdminUnlocked: false,
+
+            activeBehaviorStudentId: null,
+            editingBehaviorRows: [],
+            behaviorDirty: false,
+            editingCounselId: null,
+            lastCounselDefaults: { hours: 0, minutes: 30, medium: '면담', mid: '개인상담', type: '대인관계' },
+            unsubs: [],
+
+            colRef(name) { return fbFs.collection(db, 'users', this.user.uid, name); },
+            ref(name, id) { return fbFs.doc(db, 'users', this.user.uid, name, id); },
+            settingsRef() { return fbFs.doc(db, 'users', this.user.uid, 'settings', 'app'); },
+
+            async commit(ops) {
+                for (let i = 0; i < ops.length; i += 450) {
+                    const batch = fbFs.writeBatch(db);
+                    ops.slice(i, i + 450).forEach(op => {
+                        const r = this.ref(op.col, op.id);
+                        if (op.type === 'set') batch.set(r, op.data);
+                        else batch.delete(r);
+                    });
+                    await batch.commit();
+                }
+            },
+
+            handleFsError(e, action) {
+                console.error(action, e);
+                let msg = `${action} 실패: `;
+                if (e?.code === 'permission-denied') msg += 'Firestore 보안 규칙을 확인하세요.';
+                else if (e?.code === 'unavailable') msg += '네트워크 연결을 확인하세요.';
+                else if (e?.code === 'not-found' || e?.code === 'failed-precondition') msg += 'Firestore 데이터베이스가 생성되어 있는지 확인하세요.';
+                else msg += (e?.message || e);
+                this.showToast(msg, 'error');
+            },
+
+            showToast(msg, type = 'info') {
+                const toast = $('toast');
+                $('toast-message').textContent = msg;
+                toast.classList.toggle('bg-red-600', type === 'error');
+                toast.classList.toggle('bg-slate-800', type !== 'error');
+                toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+                clearTimeout(this._toastTimer);
+                this._toastTimer = setTimeout(() => {
+                    toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+                }, type === 'error' ? 6000 : 3000);
+            },
+
+            /* ---------- 로그인 ---------- */
+            async login() {
+                try {
+                    const provider = new fbAuth.GoogleAuthProvider();
+                    provider.setCustomParameters({ prompt: 'select_account' });
+                    await fbAuth.signInWithPopup(auth, provider);
+                } catch (e) {
+                    const map = {
+                        'auth/unauthorized-domain': `이 주소(${location.hostname})가 Firebase의 '승인된 도메인'에 없습니다.\nAuthentication > 설정 > 승인된 도메인에 추가하세요.`,
+                        'auth/operation-not-allowed': 'Firebase에서 Google 로그인이 사용 설정되지 않았습니다.',
+                        'auth/configuration-not-found': 'Firebase Authentication이 아직 시작되지 않았습니다.',
+                        'auth/popup-blocked': '브라우저가 로그인 팝업을 차단했습니다. 팝업을 허용한 뒤 다시 시도하세요.',
+                        'auth/popup-closed-by-user': '로그인 창이 닫혔습니다.',
+                        'auth/cancelled-popup-request': '로그인 창이 닫혔습니다.',
+                        'auth/operation-not-supported-in-this-environment': '이 환경에서는 로그인할 수 없습니다. 웹 주소(http/https)로 접속하세요.'
+                    };
+                    alert(map[e.code] || `로그인 오류: ${e.code || e.message}`);
+                }
+            },
+
+            async logout() {
+                if (this.behaviorDirty && !confirm('저장하지 않은 누가기록 변경 사항이 있습니다. 그래도 로그아웃할까요?')) return;
+                this.behaviorDirty = false;
+                await fbAuth.signOut(auth);
+            },
+
+            onLogin(user) {
+                this.user = user;
+                $('user-email').textContent = user.email || '';
+                $('main-nav').classList.remove('hidden');
+                $('main-nav').classList.add('flex');
+                $('mobile-nav').classList.remove('hidden');
+                this.lockAdminSession(true);
+                this.subscribe();
+                this.navigateTo('dashboard');
+            },
+
+            onLogout() {
+                this.unsubs.forEach(u => u());
+                this.unsubs = [];
+                this.user = null;
+                this.students = []; this.behaviorLogs = []; this.counselingLogs = [];
+                this.editingBehaviorRows = []; this.behaviorDirty = false; this.activeBehaviorStudentId = null;
+                this.lockAdminSession(true);
+                $('main-nav').classList.add('hidden');
+                $('main-nav').classList.remove('flex');
+                $('mobile-nav').classList.add('hidden');
+                ['dashboard', 'students', 'behavior', 'counseling'].forEach(v => $(`view-${v}`).classList.add('hidden'));
+                $('view-login').classList.remove('hidden');
+                $('login-status').textContent = '로그인이 필요합니다.';
+                $('login-btn').classList.remove('hidden');
+            },
+
+            /* ---------- 실시간 동기화 ---------- */
+            subscribe() {
+                this.unsubs.forEach(u => u());
+                this.unsubs = [];
+                const onErr = (label) => (e) => this.handleFsError(e, `${label} 불러오기`);
+
+                this.unsubs.push(fbFs.onSnapshot(this.colRef('students'), snap => {
+                    this.students = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+                        .sort((a, b) => (Number(a.number) || 0) - (Number(b.number) || 0));
+                    if (!this.students.some(s => s.id === this.activeBehaviorStudentId) && !this.behaviorDirty) {
+                        this.activeBehaviorStudentId = this.students[0]?.id || null;
+                    }
+                    this.populateStudentDropdowns();
+                    this.renderStudentTable();
+                    this.renderDashboardStats();
+                    if (!this.behaviorDirty) this.loadStudentBehaviorLogs(this.activeBehaviorStudentId);
+                    else this.updateBehaviorTitle();
+                    this.renderCounselingLogs();
+                }, onErr('학생 명단')));
+
+                this.unsubs.push(fbFs.onSnapshot(this.colRef('behavior_logs'), snap => {
+                    this.behaviorLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    if (!this.behaviorDirty) this.loadStudentBehaviorLogs(this.activeBehaviorStudentId);
+                    this.renderStudentTable();
+                    this.renderDashboardStats();
+                }, onErr('누가기록')));
+
+                this.unsubs.push(fbFs.onSnapshot(this.colRef('counseling_logs'), snap => {
+                    this.counselingLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    this.renderCounselingLogs();
+                    this.renderStudentTable();
+                    this.renderDashboardStats();
+                }, onErr('상담 기록')));
+
+                this.unsubs.push(fbFs.onSnapshot(this.settingsRef(), snap => {
+                    const d = snap.exists() ? snap.data() : {};
+                    this.settings = {
+                        grade: Number(d.grade) || 1,
+                        ban: Number(d.ban) || 1,
+                        adminPwHash: d.adminPwHash || null
+                    };
+                    $('dashboard-class-label').textContent = `${schoolYearOf(todayISO())}학년도 ${this.settings.grade}학년 ${this.settings.ban}반 · ${this.user?.email || ''}`;
+                    $('admin-default-hint').classList.toggle('hidden', !!this.settings.adminPwHash);
+                }, onErr('설정')));
+            },
+
+            /* ---------- 화면 전환 ---------- */
+            navigateTo(viewId) {
+                if (!this.user) return;
+                this.currentView = viewId;
+                $('view-login').classList.add('hidden');
+                ['dashboard', 'students', 'behavior', 'counseling'].forEach(v => {
+                    $(`view-${v}`).classList.toggle('hidden', v !== viewId);
+                    const btn = $(`nav-btn-${v}`);
+                    if (btn) {
+                        btn.classList.toggle('bg-indigo-50', v === viewId);
+                        btn.classList.toggle('text-indigo-600', v === viewId);
+                    }
+                    const mb = $(`mnav-${v}`);
+                    if (mb) {
+                        mb.classList.toggle('text-indigo-600', v === viewId);
+                        mb.classList.toggle('text-slate-500', v !== viewId);
+                    }
+                });
+                if (viewId === 'behavior') { this.populateStudentDropdowns(); this.renderBehaviorTable(); this.updateBehaviorTitle(); }
+                if (viewId === 'counseling') this.renderCounselingLogs();
+                if (viewId === 'dashboard') this.renderDashboardStats();
+                window.scrollTo({ top: 0 });
+                icons();
+            },
+
+            /* ---------- 대시보드 ---------- */
+            renderDashboardStats() {
+                $('stat-student-count').textContent = `학생: ${this.students.length}명`;
+                $('stat-behavior-count').textContent = `행특: ${this.behaviorLogs.length}건`;
+                $('stat-counsel-count').textContent = `상담: ${this.counselingLogs.length}건`;
+
+                const grid = $('quick-student-grid');
+                if (this.students.length === 0) {
+                    grid.innerHTML = `<div class="col-span-full text-center py-6 text-slate-400 text-xs">등록된 학생이 없습니다. [명단 등록/수정]에서 학생을 추가하세요.</div>`;
+                    return;
+                }
+                grid.innerHTML = this.students.map(s => {
+                    const bh = this.behaviorLogs.filter(b => b.studentId === s.id).length;
+                    const cs = this.counselingLogs.filter(c => c.studentId === s.id).length;
+                    return `
+                        <div onclick="appState.selectStudentForBehavior('${s.id}')" class="p-2.5 bg-slate-50 hover:bg-indigo-50/60 border border-slate-200/80 rounded-xl cursor-pointer transition text-center group min-w-0">
+                            <div class="text-[11px] font-bold text-slate-400 group-hover:text-indigo-600">${esc(s.number)}번</div>
+                            <div class="font-extrabold text-slate-800 text-xs my-0.5 truncate">${esc(s.name)}</div>
+                            <div class="flex items-center justify-center space-x-1 text-[10px] text-slate-500 font-semibold">
+                                <span class="text-indigo-600">행 ${bh}</span><span>•</span><span class="text-sky-600">상 ${cs}</span>
+                            </div>
+                        </div>`;
+                }).join('');
+            },
+
+            selectStudentForBehavior(stdId) {
+                if (stdId !== this.activeBehaviorStudentId) {
+                    if (this.behaviorDirty && !confirm('저장하지 않은 누가기록 변경 사항이 사라집니다. 계속할까요?')) return;
+                    this.loadStudentBehaviorLogs(stdId);
+                }
+                this.navigateTo('behavior');
+            },
+
+            /* ---------- 학생 명단 ---------- */
+            renderStudentTable() {
+                const list = $('student-list');
+                if (this.students.length === 0) {
+                    list.innerHTML = `<div class="py-8 text-center text-slate-400 text-sm">학생이 없습니다. 엑셀을 업로드하거나 직접 추가하세요.</div>`;
+                    return;
+                }
+                list.innerHTML = this.students.map(s => {
+                    const bh = this.behaviorLogs.filter(b => b.studentId === s.id).length;
+                    const cs = this.counselingLogs.filter(c => c.studentId === s.id).length;
+                    return `
+                        <div class="grid grid-cols-[60px_1fr_68px_40px] md:grid-cols-[80px_1fr_100px_230px_70px] items-center gap-2 md:gap-0 px-3 md:px-0 py-3 hover:bg-slate-50/80 transition">
+                            <div class="order-1 md:order-none md:px-4 md:text-center">
+                                <input type="number" min="1" value="${esc(s.number)}" onchange="appState.updateStudent('${s.id}', 'number', this.value)" class="w-full md:w-14 text-center bg-white border border-slate-200 rounded px-1 py-1 text-xs font-bold">
+                            </div>
+                            <div class="order-2 md:order-none md:px-4 min-w-0">
+                                <input type="text" value="${esc(s.name)}" onchange="appState.updateStudent('${s.id}', 'name', this.value)" class="w-full md:w-40 font-bold text-slate-800 bg-white border border-slate-200 rounded px-2 py-1 text-xs">
+                            </div>
+                            <div class="order-3 md:order-none md:px-4">
+                                <select onchange="appState.updateStudent('${s.id}', 'gender', this.value)" class="w-full md:w-auto bg-white border border-slate-200 rounded px-1 py-1 text-xs font-bold">
+                                    <option value="남" ${s.gender === '남' ? 'selected' : ''}>남</option>
+                                    <option value="여" ${s.gender === '여' ? 'selected' : ''}>여</option>
+                                </select>
+                            </div>
+                            <div class="order-5 md:order-none col-span-4 md:col-span-1 md:px-4 flex md:justify-center gap-1 flex-wrap">
+                                <span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold rounded-full text-[11px]">누가기록 ${bh}건</span>
+                                <span class="px-2 py-0.5 bg-sky-50 text-sky-700 font-bold rounded-full text-[11px]">상담 ${cs}건</span>
+                            </div>
+                            <div class="order-4 md:order-none md:px-4 text-center">
+                                <button onclick="appState.deleteStudent('${s.id}')" class="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            </div>
+                        </div>`;
+                }).join('');
+                icons();
+            },
+
+            async addStudentRow() {
+                const nextNum = this.students.length ? Math.max(...this.students.map(s => Number(s.number) || 0)) + 1 : 1;
+                const id = newId('std');
+                try {
+                    await fbFs.setDoc(this.ref('students', id), { number: nextNum, name: `학생${nextNum}`, gender: '남' });
+                    this.showToast('학생이 추가되었습니다. 이름을 수정하세요.');
+                } catch (e) { this.handleFsError(e, '학생 추가'); }
+            },
+
+            async updateStudent(id, key, val) {
+                let v = val;
+                if (key === 'number') {
+                    v = parseInt(val, 10);
+                    if (!v || v < 1) { alert('번호는 1 이상의 숫자여야 합니다.'); this.renderStudentTable(); return; }
+                    if (this.students.some(s => s.id !== id && Number(s.number) === v)) this.showToast(`${v}번이 이미 있습니다. 번호를 확인하세요.`, 'error');
+                }
+                if (key === 'name') {
+                    v = String(val).trim();
+                    if (!v) { alert('이름을 입력하세요.'); this.renderStudentTable(); return; }
+                }
+                try {
+                    await fbFs.setDoc(this.ref('students', id), { [key]: v }, { merge: true });
+                    if (key === 'name' || key === 'number') {
+                        const field = key === 'name' ? 'studentName' : 'number';
+                        const ops = this.counselingLogs.filter(c => c.studentId === id).map(c => {
+                            const { id: cid, ...data } = c;
+                            return { type: 'set', col: 'counseling_logs', id: cid, data: { ...data, [field]: v } };
+                        });
+                        if (ops.length) await this.commit(ops);
+                    }
+                } catch (e) { this.handleFsError(e, '학생 정보 수정'); }
+            },
+
+            async deleteStudent(id) {
+                const s = this.students.find(x => x.id === id);
+                if (!s) return;
+                const bh = this.behaviorLogs.filter(b => b.studentId === id);
+                const cs = this.counselingLogs.filter(c => c.studentId === id);
+                if (!confirm(`${s.number}번 ${s.name} 학생을 삭제할까요?\n이 학생의 누가기록 ${bh.length}건, 상담기록 ${cs.length}건도 함께 삭제됩니다.`)) return;
+                const ops = [{ type: 'delete', col: 'students', id }];
+                bh.forEach(b => ops.push({ type: 'delete', col: 'behavior_logs', id: b.id }));
+                cs.forEach(c => ops.push({ type: 'delete', col: 'counseling_logs', id: c.id }));
+                if (this.activeBehaviorStudentId === id) { this.behaviorDirty = false; this.updateDirtyBadge(); }
+                try {
+                    await this.commit(ops);
+                    this.showToast('학생과 관련 기록이 삭제되었습니다.');
+                } catch (e) { this.handleFsError(e, '학생 삭제'); }
+            },
+
+            async handleRosterExcelUpload(e) {
+                const file = e.target.files[0];
+                e.target.value = '';
+                if (!file) return;
+                try {
+                    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+                    const rows = sheetToObjects(wb.Sheets[wb.SheetNames[0]], ['성명', '이름', 'name']);
+                    if (!rows) { alert("엑셀에서 '성명' 또는 '이름' 열을 찾지 못했습니다."); return; }
+
+                    const incoming = [];
+                    rows.forEach((r, i) => {
+                        const name = String(r['성명'] ?? r['이름'] ?? r['name'] ?? '').trim();
+                        if (!name) return;
+                        const num = parseInt(r['번호'] ?? r['number'], 10) || (i + 1);
+                        const g = String(r['성별'] ?? r['gender'] ?? '').trim();
+                        incoming.push({ number: num, name, gender: /^(여|F|f)/.test(g) ? '여' : '남' });
+                    });
+                    if (!incoming.length) { alert('엑셀에 학생 이름이 없습니다.'); return; }
+
+                    const used = new Set();
+                    const result = incoming.map(s => {
+                        let m = this.students.find(x => !used.has(x.id) && x.name === s.name && Number(x.number) === s.number);
+                        if (!m) {
+                            const same = this.students.filter(x => !used.has(x.id) && x.name === s.name);
+                            if (same.length === 1) m = same[0];
+                        }
+                        if (m) used.add(m.id);
+                        return { id: m ? m.id : newId('std'), kept: !!m, ...s };
+                    });
+                    const removed = this.students.filter(x => !used.has(x.id));
+                    const removedBh = this.behaviorLogs.filter(b => removed.some(r => r.id === b.studentId));
+                    const removedCs = this.counselingLogs.filter(c => removed.some(r => r.id === c.studentId));
+
+                    const dupNums = incoming.map(s => s.number).filter((n, i, a) => a.indexOf(n) !== i);
+                    let msg = `엑셀 명단 ${result.length}명으로 학급 명단을 덮어씁니다.\n- 기존 기록이 유지되는 학생: ${result.filter(r => r.kept).length}명\n- 새로 추가되는 학생: ${result.filter(r => !r.kept).length}명`;
+                    if (removed.length) {
+                        msg += `\n\n⚠ 새 명단에 없는 ${removed.length}명(${removed.map(r => r.name).join(', ')})은 삭제되며,\n이 학생들의 누가기록 ${removedBh.length}건, 상담기록 ${removedCs.length}건도 함께 삭제됩니다.`;
+                    }
+                    if (dupNums.length) msg += `\n\n⚠ 번호가 중복된 학생이 있습니다: ${[...new Set(dupNums)].join(', ')}번`;
+                    msg += '\n\n진행할까요?';
+                    if (!confirm(msg)) return;
+
+                    const ops = [];
+                    result.forEach(({ id, kept, ...data }) => ops.push({ type: 'set', col: 'students', id, data }));
+                    removed.forEach(r => ops.push({ type: 'delete', col: 'students', id: r.id }));
+                    removedBh.forEach(b => ops.push({ type: 'delete', col: 'behavior_logs', id: b.id }));
+                    removedCs.forEach(c => ops.push({ type: 'delete', col: 'counseling_logs', id: c.id }));
+                    if (removed.some(r => r.id === this.activeBehaviorStudentId)) { this.behaviorDirty = false; this.updateDirtyBadge(); }
+
+                    await this.commit(ops);
+                    this.showToast(`명단 ${result.length}명을 업로드했습니다.`);
+                } catch (err) {
+                    console.error(err);
+                    if (err?.code) this.handleFsError(err, '명단 업로드');
+                    else alert('명단 엑셀 파일을 읽는 중 오류가 발생했습니다.');
+                }
+            },
+
+            populateStudentDropdowns() {
+                const opts = this.students.map(s => `<option value="${s.id}">${esc(s.number)}번 ${esc(s.name)}</option>`).join('');
+                const bh = $('behavior-student-select');
+                bh.innerHTML = opts || '<option value="">학생 없음</option>';
+                if (this.activeBehaviorStudentId) bh.value = this.activeBehaviorStudentId;
+
+                const modalSel = $('counsel-modal-student');
+                const prevModal = modalSel.value;
+                modalSel.innerHTML = `<option value="">(학생 지정 안 함)</option>` + opts;
+                modalSel.value = [...modalSel.options].some(o => o.value === prevModal) ? prevModal : '';
+
+                const filter = $('counsel-filter-student');
+                const prevFilter = filter.value || 'ALL';
+                filter.innerHTML = `<option value="ALL">전체 학생</option>` + opts + `<option value="NONE">학생 미지정</option>`;
+                filter.value = [...filter.options].some(o => o.value === prevFilter) ? prevFilter : 'ALL';
+            },
+
+            /* ---------- 행동특성 누가기록 ---------- */
+            loadStudentBehaviorLogs(studentId) {
+                this.activeBehaviorStudentId = studentId || null;
+                const rows = this.behaviorLogs.filter(b => b.studentId === studentId).sort((a, b) => (a.seq || 0) - (b.seq || 0));
+                this.editingBehaviorRows = rows.map(r => ({ ...r }));
+                this.behaviorDirty = false;
+                this.updateDirtyBadge();
+                this.updateBehaviorTitle();
+                this.renderBehaviorTable();
+            },
+
+            changeBehaviorStudent(id) {
+                if (this.behaviorDirty && !confirm('저장하지 않은 누가기록 변경 사항이 사라집니다. 다른 학생으로 바꿀까요?')) {
+                    $('behavior-student-select').value = this.activeBehaviorStudentId;
+                    return;
+                }
+                this.loadStudentBehaviorLogs(id);
+            },
+
+            revertBehaviorLogs() {
+                if (!this.behaviorDirty) { this.showToast('되돌릴 변경 사항이 없습니다.'); return; }
+                if (!confirm('저장하지 않은 변경 사항을 버리고 마지막 저장 상태로 되돌릴까요?')) return;
+                this.loadStudentBehaviorLogs(this.activeBehaviorStudentId);
+            },
+
+            updateBehaviorTitle() {
+                const std = this.students.find(s => s.id === this.activeBehaviorStudentId);
+                $('behavior-active-title').innerHTML = std
+                    ? `<span class="text-indigo-600">${esc(std.number)}번 ${esc(std.name)}</span>`
+                    : `학생을 선택하세요`;
+                $('behavior-log-total').textContent = `Total ${this.editingBehaviorRows.length}`;
+            },
+
+            updateDirtyBadge() { $('behavior-dirty').classList.toggle('hidden', !this.behaviorDirty); },
+
+            markBehaviorDirty() { this.behaviorDirty = true; this.updateDirtyBadge(); },
+
+            editBehavior(idx, key, val) {
+                const row = this.editingBehaviorRows[idx];
+                if (!row) return;
+                row[key] = key === 'date' ? isoToNeis(val) : val;
+                this.markBehaviorDirty();
+            },
+
+            renderBehaviorTable() {
+                const list = $('behavior-list');
+                $('behavior-check-all').checked = false;
+                $('behavior-check-all-m').checked = false;
+                $('behavior-log-total').textContent = `Total ${this.editingBehaviorRows.length}`;
+                if (!this.activeBehaviorStudentId) {
+                    list.innerHTML = `<div class="py-8 text-center text-slate-400">먼저 학생 명단을 등록하세요.</div>`;
+                    return;
+                }
+                if (this.editingBehaviorRows.length === 0) {
+                    list.innerHTML = `<div class="py-8 px-4 text-center text-slate-400">등록된 누가기록이 없습니다. '행추가' 버튼으로 기록을 추가하세요.</div>`;
+                    return;
+                }
+                list.innerHTML = this.editingBehaviorRows.map((row, idx) => `
+                    <div class="p-3 md:p-0 md:grid md:grid-cols-[48px_60px_180px_1fr] md:items-start hover:bg-slate-50/60 transition">
+                        <div class="flex items-center gap-3 md:contents">
+                            <div class="md:py-3 md:px-3 md:text-center">
+                                <input type="checkbox" data-index="${idx}" class="behavior-row-check rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4">
+                            </div>
+                            <div class="text-xs md:text-sm font-bold text-slate-500 md:text-slate-600 md:py-3 md:px-3 md:text-center">${idx + 1}</div>
+                            <div class="ml-auto md:ml-0 md:py-3 md:px-3">
+                                <input type="date" value="${esc(neisToIso(row.date))}" onchange="appState.editBehavior(${idx}, 'date', this.value)" class="w-40 md:w-36 bg-white border border-slate-300 rounded-md px-2 py-1 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                        </div>
+                        <div class="mt-2 md:mt-0 md:py-3 md:px-3">
+                            <textarea rows="3" oninput="appState.editBehavior(${idx}, 'content', this.value)" class="w-full bg-white border border-slate-300 rounded-md p-2 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500" placeholder="행동특성 관찰 내용 입력">${esc(row.content)}</textarea>
+                        </div>
+                    </div>`).join('');
+            },
+
+            addBehaviorLogRow() {
+                if (!this.activeBehaviorStudentId) { alert('학생을 먼저 선택하세요.'); return; }
+                this.editingBehaviorRows.push({
+                    id: newId('bh'),
+                    studentId: this.activeBehaviorStudentId,
+                    seq: this.editingBehaviorRows.length + 1,
+                    date: isoToNeis(todayISO()),
+                    content: ''
+                });
+                this.markBehaviorDirty();
+                this.renderBehaviorTable();
+                const areas = document.querySelectorAll('#behavior-list textarea');
+                if (areas.length) { areas[areas.length - 1].focus(); areas[areas.length - 1].scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+            },
+
+            async saveBehaviorLogs() {
+                const sid = this.activeBehaviorStudentId;
+                if (!sid) { alert('학생을 먼저 선택하세요.'); return; }
+                const rows = this.editingBehaviorRows;
+                const bad = rows.findIndex(r => !r.date || !String(r.content || '').trim());
+                if (bad >= 0) { alert(`${bad + 1}번째 행의 일자 또는 내용이 비어 있습니다. 입력하거나 행을 삭제하세요.`); return; }
+
+                const sorted = rows.map((r, i) => ({ r, i }))
+                    .sort((a, b) => neisToIso(a.r.date).localeCompare(neisToIso(b.r.date)) || a.i - b.i)
+                    .map(x => x.r);
+                sorted.forEach((r, i) => { r.seq = i + 1; });
+
+                const keep = new Set(sorted.map(r => r.id));
+                const ops = [];
+                this.behaviorLogs.filter(b => b.studentId === sid && !keep.has(b.id))
+                    .forEach(b => ops.push({ type: 'delete', col: 'behavior_logs', id: b.id }));
+                sorted.forEach(r => ops.push({
+                    type: 'set', col: 'behavior_logs', id: r.id,
+                    data: { studentId: sid, seq: r.seq, date: r.date, content: String(r.content).trim() }
+                }));
+
+                try {
+                    await this.commit(ops);
+                    this.loadStudentBehaviorLogs(sid);
+                    this.showToast('행동특성 누가기록이 저장되었습니다.');
+                } catch (e) { this.handleFsError(e, '누가기록 저장'); }
+            },
+
+            toggleAllBehaviorChecks(checked) {
+                document.querySelectorAll('.behavior-row-check').forEach(cb => { cb.checked = checked; });
+                $('behavior-check-all').checked = checked;
+                $('behavior-check-all-m').checked = checked;
+            },
+
+            deleteSelectedBehaviorLogs() {
+                const checks = document.querySelectorAll('.behavior-row-check:checked');
+                if (checks.length === 0) { alert('삭제할 항목을 선택하세요.'); return; }
+                const idxs = [...checks].map(cb => Number(cb.dataset.index)).sort((a, b) => b - a);
+                idxs.forEach(i => this.editingBehaviorRows.splice(i, 1));
+                this.markBehaviorDirty();
+                this.renderBehaviorTable();
+                this.showToast(`${idxs.length}건을 목록에서 뺐습니다. [저장]을 눌러야 최종 반영됩니다.`);
+            },
+
+            printStudentBehaviorLog() {
+                const std = this.students.find(s => s.id === this.activeBehaviorStudentId);
+                if (!std) { alert('학생을 먼저 선택하세요.'); return; }
+                const rows = this.editingBehaviorRows;
+                $('print-area').innerHTML = `
+                    <h1 style="font-size:18px;font-weight:700;margin-bottom:4px;">행동특성 누가기록</h1>
+                    <p style="font-size:12px;margin-bottom:12px;">${schoolYearOf(todayISO())}학년도 ${this.settings.grade}학년 ${this.settings.ban}반 ${esc(std.number)}번 ${esc(std.name)} · 출력일 ${isoToNeis(todayISO())}
+                    ${this.behaviorDirty ? ' · <b>※ 저장되지 않은 내용 포함</b>' : ''}</p>
+                    <table>
+                        <thead><tr><th style="width:40px;">순번</th><th style="width:100px;">일자</th><th>행동특성 내용</th></tr></thead>
+                        <tbody>${rows.length ? rows.map((r, i) => `
+                            <tr><td style="text-align:center;">${i + 1}</td><td>${esc(r.date)}</td><td style="white-space:pre-wrap;">${esc(r.content)}</td></tr>`).join('')
+                            : '<tr><td colspan="3" style="text-align:center;">기록 없음</td></tr>'}</tbody>
+                    </table>`;
+                document.body.classList.add('printing');
+                window.print();
+                setTimeout(() => document.body.classList.remove('printing'), 500);
+            },
+
+            openBulkBehaviorModal() {
+                if (!this.students.length) { alert('먼저 학생 명단을 등록하세요.'); return; }
+                $('bulk-behavior-date').value = todayISO();
+                $('bulk-behavior-content').value = '';
+                $('bulk-student-checkboxes').innerHTML = this.students.map(s => `
+                    <label class="flex items-center space-x-2 bg-white p-2 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100 min-w-0">
+                        <input type="checkbox" value="${s.id}" class="bulk-std-cb rounded text-indigo-600 flex-shrink-0">
+                        <span class="font-bold text-slate-700 truncate">${esc(s.number)}번 ${esc(s.name)}</span>
+                    </label>`).join('');
+                $('modal-bulk-behavior').classList.remove('hidden');
+            },
+
+            closeBulkBehaviorModal() { $('modal-bulk-behavior').classList.add('hidden'); },
+
+            toggleBulkAllStudents() {
+                const cbs = document.querySelectorAll('.bulk-std-cb');
+                const anyUnchecked = [...cbs].some(cb => !cb.checked);
+                cbs.forEach(cb => { cb.checked = anyUnchecked; });
+            },
+
+            async applyBulkBehaviorLog() {
+                const dateISO = $('bulk-behavior-date').value;
+                const content = $('bulk-behavior-content').value.trim();
+                const ids = [...document.querySelectorAll('.bulk-std-cb:checked')].map(cb => cb.value);
+                if (!dateISO || !content || ids.length === 0) { alert('일자, 내용, 적용할 학생을 모두 입력 및 선택하세요.'); return; }
+
+                const ops = [];
+                ids.forEach(sid => {
+                    const seqs = this.behaviorLogs.filter(b => b.studentId === sid).map(b => b.seq || 0);
+                    if (sid === this.activeBehaviorStudentId) this.editingBehaviorRows.forEach(r => seqs.push(r.seq || 0));
+                    const log = { id: newId('bh'), studentId: sid, seq: (seqs.length ? Math.max(...seqs) : 0) + 1, date: isoToNeis(dateISO), content };
+                    ops.push({ type: 'set', col: 'behavior_logs', id: log.id, data: { studentId: log.studentId, seq: log.seq, date: log.date, content: log.content } });
+                    if (sid === this.activeBehaviorStudentId && this.behaviorDirty) this.editingBehaviorRows.push({ ...log });
+                });
+                try {
+                    await this.commit(ops);
+                    this.closeBulkBehaviorModal();
+                    this.renderBehaviorTable();
+                    this.showToast(`${ids.length}명에게 일괄 등록되었습니다.`);
+                } catch (e) { this.handleFsError(e, '일괄 등록'); }
+            },
+
+            exportBehaviorExcel() {
+                if (!this.behaviorLogs.length) { alert('내보낼 누가기록이 없습니다.'); return; }
+                const rows = [];
+                this.students.forEach(s => {
+                    this.behaviorLogs.filter(b => b.studentId === s.id).sort((a, b) => (a.seq || 0) - (b.seq || 0)).forEach(b => {
+                        rows.push({ '학년': this.settings.grade, '반': this.settings.ban, '번호': s.number, '성명': s.name, '순번': b.seq, '일자': b.date, '행동특성내용': b.content });
+                    });
+                });
+                const ws = XLSX.utils.json_to_sheet(rows);
+                ws['!cols'] = [{ wch: 5 }, { wch: 5 }, { wch: 5 }, { wch: 10 }, { wch: 5 }, { wch: 13 }, { wch: 80 }];
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, '행동특성누가기록');
+                XLSX.writeFile(wb, `행동특성_누가기록_${todayISO()}.xlsx`);
+                this.showToast('누가기록 엑셀 파일을 내려받았습니다.');
+            },
+
+            /* ---------- 상담 기록 (나이스 서식 16개 열) ---------- */
+            // 저장된 기록을 서식 기준으로 정리 (이전 버전 데이터도 변환)
+            normalizeCounsel(c) {
+                const std = this.students.find(s => s.id === c.studentId);
+                const hours = Number(c.hours), minutes = Number(c.minutes);
+                // 이전 버전에서는 midCategory에 '교우관계' 등이 들어있었음 → 개인상담으로 처리
+                const mid = NEIS.mids.includes(c.midCategory) ? c.midCategory : '개인상담';
+                return {
+                    ...c,
+                    counselCategory: NEIS.counselCategory,
+                    weeClass: NEIS.weeClass,
+                    mainCategory: NEIS.mainCategory,
+                    midCategory: mid,
+                    counselorAffiliation: NEIS.counselor,
+                    counselType: NEIS.typesByMid[mid].includes(c.counselType) ? c.counselType
+                        : (mid === '개인상담' && LEGACY_TYPE[c.midCategory]) || '기타',
+                    headcount: Number(c.headcount) > 0 ? Number(c.headcount) : 1,
+                    schoolYear: Number(c.schoolYear) || schoolYearOf(c.counselDate),
+                    grade: NEIS.grades.includes(c.grade) ? c.grade : gradeLabel(this.settings.grade),
+                    gender: NEIS.genders.includes(c.gender) ? c.gender : (std?.gender || '남'),
+                    subject: String(c.subject || '').trim() || String(c.counselContent || '').trim().slice(0, 30),
+                    hours: Number.isFinite(hours) && hours >= 0 ? hours : 0,
+                    minutes: Number.isFinite(minutes) && minutes >= 0 ? minutes : 30,
+                    medium: NEIS.media.includes(c.medium) ? c.medium : (LEGACY_MEDIUM[c.counselMethod] || '면담')
+                };
+            },
+
+            studentLabel(c) {
+                const std = this.students.find(s => s.id === c.studentId);
+                if (std) return { num: std.number, name: std.name, text: `${std.number}번 ${std.name}`, missing: false };
+                if (c.studentName) return { num: c.number ?? '', name: c.studentName, text: c.studentName, missing: true };
+                return { num: '', name: '', text: '미지정', missing: true };
+            },
+
+            renderCounselingLogs() {
+                const tbody = $('counseling-table-body');
+                const cards = $('counseling-card-list');
+                const fStd = $('counsel-filter-student').value || 'ALL';
+                const fType = $('counsel-filter-type').value || 'ALL';
+                let list = this.counselingLogs.map(c => this.normalizeCounsel(c));
+                if (fStd === 'NONE') list = list.filter(c => !this.students.some(s => s.id === c.studentId));
+                else if (fStd !== 'ALL') list = list.filter(c => c.studentId === fStd);
+                const fMid = $('counsel-filter-mid').value || 'ALL';
+                if (fMid !== 'ALL') list = list.filter(c => c.midCategory === fMid);
+                if (fType !== 'ALL') list = list.filter(c => c.counselType === fType);
+                list.sort((a, b) => String(b.counselDate).localeCompare(String(a.counselDate)));
+
+                $('counsel-log-count').textContent = `총 ${list.length}건의 상담 기록`;
+                if (!list.length) {
+                    const empty = '등록된 상담 기록이 없습니다.';
+                    tbody.innerHTML = `<tr><td colspan="10" class="py-8 text-center text-slate-400">${empty}</td></tr>`;
+                    cards.innerHTML = `<div class="bg-white rounded-2xl border border-slate-200/80 py-8 text-center text-slate-400 text-xs">${empty}</div>`;
+                    return;
+                }
+
+                tbody.innerHTML = list.map(c => {
+                    const s = this.studentLabel(c);
+                    return `
+                        <tr class="hover:bg-slate-50/80 transition align-top">
+                            <td class="py-2.5 px-3 font-semibold text-slate-600 whitespace-nowrap">${esc(c.counselDate)}</td>
+                            <td class="py-2.5 px-3 text-slate-500">${esc(c.schoolYear)}</td>
+                            <td class="py-2.5 px-3 font-bold ${s.missing ? 'text-slate-400' : 'text-slate-800'}">${esc(s.text)}</td>
+                            <td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">${esc(c.midCategory)}</td>
+                            <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-sky-50 text-sky-700 font-bold">${esc(c.counselType)}</span></td>
+                            <td class="py-2.5 px-3 font-semibold text-slate-800">${esc(c.subject)}</td>
+                            <td class="py-2.5 px-3 text-slate-600 max-w-xs truncate" title="${esc(c.counselContent)}">${esc(c.counselContent)}</td>
+                            <td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">${esc(c.medium)}</td>
+                            <td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">${minutesLabel(c.hours, c.minutes)}</td>
+                            <td class="py-2.5 px-3 text-center whitespace-nowrap">
+                                <button onclick="appState.openCounselingModal('${c.id}')" class="p-1 text-slate-400 hover:text-sky-600" title="수정"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                                <button onclick="appState.deleteCounselingLog('${c.id}')" class="p-1 text-slate-400 hover:text-red-600" title="삭제"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            </td>
+                        </tr>`;
+                }).join('');
+
+                cards.innerHTML = list.map(c => {
+                    const s = this.studentLabel(c);
+                    return `
+                        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 space-y-2">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <div class="text-[11px] font-bold text-slate-400">${esc(c.counselDate)} · ${esc(c.schoolYear)}학년도</div>
+                                    <div class="font-bold text-sm text-slate-900 break-words">${esc(c.subject)}</div>
+                                </div>
+                                <div class="flex flex-shrink-0">
+                                    <button onclick="appState.openCounselingModal('${c.id}')" class="p-2 text-slate-400 hover:text-sky-600" title="수정"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                                    <button onclick="appState.deleteCounselingLog('${c.id}')" class="p-2 text-slate-400 hover:text-red-600" title="삭제"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-1 text-[11px] font-bold">
+                                <span class="px-2 py-0.5 rounded-full ${s.missing ? 'bg-slate-100 text-slate-400' : 'bg-indigo-50 text-indigo-700'}">${esc(s.text)}</span>
+                                <span class="px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">${esc(c.midCategory)} · ${esc(c.counselType)}</span>
+                                <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">${esc(c.medium)}</span>
+                                <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">${minutesLabel(c.hours, c.minutes)}</span>
+                            </div>
+                            <p class="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap break-words line-clamp-3">${esc(c.counselContent)}</p>
+                        </div>`;
+                }).join('');
+                icons();
+            },
+
+            updateSchoolYearDisplay() {
+                const d = $('counsel-modal-date').value;
+                $('counsel-modal-year').value = d ? `${schoolYearOf(d)}학년도` : '';
+            },
+
+            onCounselMidChange() {
+                const mid = $('counsel-modal-mid').value;
+                const sel = $('counsel-modal-type');
+                const prev = sel.value;
+                sel.innerHTML = options(NEIS.typesByMid[mid] || []);
+                if ([...sel.options].some(o => o.value === prev)) sel.value = prev;            },
+
+            onFilterMidChange() {
+                const mid = $('counsel-filter-mid').value;
+                const types = mid === 'ALL' ? [...new Set(Object.values(NEIS.typesByMid).flat())] : NEIS.typesByMid[mid];
+                $('counsel-filter-type').innerHTML = `<option value="ALL">전체 상담구분</option>` + options(types);
+                this.renderCounselingLogs();
+            },
+
+            onCounselStudentChange() {
+                const std = this.students.find(s => s.id === $('counsel-modal-student').value);
+                if (std && NEIS.genders.includes(std.gender)) $('counsel-modal-gender').value = std.gender;
+            },
+
+            openCounselingModal(id = null) {
+                this.populateStudentDropdowns();
+                this.editingCounselId = id;
+                const raw = id ? this.counselingLogs.find(x => x.id === id) : null;
+                const c = raw ? this.normalizeCounsel(raw) : null;
+                const d = this.lastCounselDefaults;
+                $('counsel-modal-title').textContent = c ? '상담 기록 수정' : '상담 기록 작성';
+
+                const filterStd = $('counsel-filter-student').value;
+                const stdId = c ? (this.students.some(s => s.id === c.studentId) ? c.studentId : '') : (filterStd !== 'ALL' && filterStd !== 'NONE' ? filterStd : '');
+                $('counsel-modal-student').value = stdId;
+                $('counsel-modal-date').value = c ? c.counselDate : todayISO();
+                this.updateSchoolYearDisplay();
+                $('counsel-modal-mid').value = c ? c.midCategory : d.mid;
+                this.onCounselMidChange();
+                $('counsel-modal-type').value = c ? c.counselType : (NEIS.typesByMid[$('counsel-modal-mid').value].includes(d.type) ? d.type : NEIS.typesByMid[$('counsel-modal-mid').value][0]);
+                $('counsel-modal-medium').value = c ? c.medium : d.medium;
+                $('counsel-modal-grade').value = c ? c.grade : gradeLabel(this.settings.grade);
+                $('counsel-modal-gender').value = c ? c.gender : '남';
+                if (!c) this.onCounselStudentChange();
+                $('counsel-modal-headcount').value = c ? c.headcount : 1;
+                $('counsel-modal-hours').value = c ? c.hours : d.hours;
+                $('counsel-modal-minutes').value = c ? c.minutes : d.minutes;
+                $('counsel-modal-subject').value = c ? c.subject : '';
+                $('counsel-modal-content').value = c ? c.counselContent : '';
+                $('modal-counseling').classList.remove('hidden');
+            },
+
+            closeCounselingModal() {
+                $('modal-counseling').classList.add('hidden');
+                this.editingCounselId = null;
+            },
+
+            async saveCounselingLog() {
+                const stdId = $('counsel-modal-student').value;
+                const counselDate = $('counsel-modal-date').value;
+                const subject = $('counsel-modal-subject').value.trim();
+                const counselContent = $('counsel-modal-content').value.trim();
+                const headcount = parseInt($('counsel-modal-headcount').value, 10);
+                const hours = parseInt($('counsel-modal-hours').value, 10) || 0;
+                const minutes = parseInt($('counsel-modal-minutes').value, 10) || 0;
+
+                if (!counselDate) { alert('상담일자를 선택하세요.'); return; }
+                if (!subject) { alert('상담제목을 입력하세요.'); return; }
+                if (!counselContent) { alert('상담내용을 입력하세요.'); return; }
+                if (!headcount || headcount < 1) { alert('상담인원은 1 이상의 숫자로 입력하세요.'); return; }
+                if (hours < 0 || minutes < 0 || minutes > 59) { alert('상담시간을 확인하세요. (분은 0~59)'); return; }
+                if (hours === 0 && minutes === 0) { alert('상담시간을 입력하세요.'); return; }
+
+                const std = this.students.find(s => s.id === stdId);
+                const id = this.editingCounselId || newId('cs');
+                const data = {
+                    studentId: std ? std.id : null,
+                    studentName: std ? std.name : '',
+                    number: std ? std.number : null,
+                    counselCategory: NEIS.counselCategory,
+                    weeClass: NEIS.weeClass,
+                    mainCategory: NEIS.mainCategory,
+                    midCategory: $('counsel-modal-mid').value,
+                    counselType: $('counsel-modal-type').value,
+                    headcount,
+                    schoolYear: schoolYearOf(counselDate),
+                    counselDate,
+                    grade: $('counsel-modal-grade').value,
+                    gender: $('counsel-modal-gender').value,
+                    subject,
+                    counselContent,
+                    hours,
+                    minutes,
+                    counselorAffiliation: NEIS.counselor,
+                    medium: $('counsel-modal-medium').value
+                };
+                try {
+                    await fbFs.setDoc(this.ref('counseling_logs', id), data);
+                    this.lastCounselDefaults = { hours, minutes, medium: data.medium, mid: data.midCategory, type: data.counselType };
+                    const wasEdit = !!this.editingCounselId;
+                    this.closeCounselingModal();
+                    this.showToast(wasEdit ? '상담 기록이 수정되었습니다.' : '상담 기록이 저장되었습니다.');
+                } catch (e) { this.handleFsError(e, '상담 기록 저장'); }
+            },
+
+            async deleteCounselingLog(id) {
+                if (!confirm('해당 상담 기록을 삭제하시겠습니까?')) return;
+                try {
+                    await fbFs.deleteDoc(this.ref('counseling_logs', id));
+                    this.showToast('상담 기록이 삭제되었습니다.');
+                } catch (e) { this.handleFsError(e, '상담 기록 삭제'); }
+            },
+
+            // 나이스 업로드 서식(또는 이 앱에서 내보낸 파일) 가져오기
+            async handleCounselingExcelUpload(e) {
+                const file = e.target.files[0];
+                e.target.value = '';
+                if (!file) return;
+                try {
+                    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+                    const sheetName = wb.SheetNames.includes('입력') ? '입력' : wb.SheetNames[0];
+                    const rows = sheetToObjects(wb.Sheets[sheetName], ['상담내용']);
+                    if (!rows) { alert("엑셀에서 '상담내용' 열을 찾지 못했습니다."); return; }
+
+                    const pick = (v, list, def) => { const s = String(v ?? '').trim(); return list.includes(s) ? s : def; };
+                    const ops = [];
+                    let dup = 0, noDate = 0;
+                    const seen = new Set(this.counselingLogs.map(c => this.normalizeCounsel(c)).map(c => `${c.counselDate}|${c.subject}|${c.counselContent}`));
+
+                    rows.forEach(r => {
+                        const content = String(r['상담내용'] ?? '').trim();
+                        if (!content) return;
+                        const date = excelDateToISO(r['상담일자']);
+                        if (!date) { noDate++; return; }
+                        const subject = String(r['상담제목'] ?? '').trim() || content.slice(0, 30);
+                        const key = `${date}|${subject}|${content}`;
+                        if (seen.has(key)) { dup++; return; }
+                        seen.add(key);
+
+                        // 서식에는 학생 열이 없음. 성명/번호 열이 있으면 연결
+                        const name = String(r['성명'] ?? r['이름'] ?? '').trim();
+                        const num = parseInt(r['번호'], 10);
+                        let std = name ? this.students.find(s => s.name === name && Number(s.number) === num) : null;
+                        if (!std && name) { const same = this.students.filter(s => s.name === name); if (same.length === 1) std = same[0]; }
+
+                        const h = parseInt(r['상담시간(시)'], 10), m = parseInt(r['상담시간(분)'], 10);
+                        const mid = pick(r['중분류'], NEIS.mids, '개인상담');
+                        ops.push({
+                            type: 'set', col: 'counseling_logs', id: newId('cs'),
+                            data: {
+                                studentId: std ? std.id : null,
+                                studentName: std ? std.name : name,
+                                number: std ? std.number : (num || null),
+                                counselCategory: NEIS.counselCategory,
+                                weeClass: NEIS.weeClass,
+                                mainCategory: NEIS.mainCategory,
+                                midCategory: mid,
+                                counselType: pick(r['상담구분'], NEIS.typesByMid[mid], '기타'),
+                                headcount: parseInt(r['상담인원'], 10) || 1,
+                                schoolYear: parseInt(r['학년도'], 10) || schoolYearOf(date),
+                                counselDate: date,
+                                grade: pick(r['학년'], NEIS.grades, gradeLabel(this.settings.grade)),
+                                gender: pick(r['성별'], NEIS.genders, std?.gender || '남'),
+                                subject,
+                                counselContent: content,
+                                hours: Number.isFinite(h) ? h : 0,
+                                minutes: Number.isFinite(m) ? m : 30,
+                                counselorAffiliation: NEIS.counselor,
+                                medium: pick(r['상담매체구분'], NEIS.media, '면담')
+                            }
+                        });
+                    });
+
+                    if (ops.length) await this.commit(ops);
+                    let msg = `${ops.length}건의 상담 기록을 가져왔습니다.`;
+                    if (dup) msg += `\n- 이미 있는 기록이라 건너뜀: ${dup}건`;
+                    if (noDate) msg += `\n- 상담일자를 읽지 못해 건너뜀: ${noDate}건`;
+                    if (ops.length) msg += `\n\n나이스 서식에는 학생 열이 없어 '학생 미지정'으로 들어갑니다. 필요하면 각 기록의 수정 버튼에서 학생을 지정하세요.`;
+                    alert(msg);
+                } catch (err) {
+                    console.error(err);
+                    if (err?.code) this.handleFsError(err, '상담 엑셀 업로드');
+                    else alert('상담 엑셀 파일을 읽는 중 오류가 발생했습니다.');
+                }
+            },
+
+            exportNEISCounselingExcel() {
+                if (!this.isAdminUnlocked) { alert('관리자 인증이 필요합니다.'); return; }
+                const yearSel = $('export-school-year').value;
+                let list = this.counselingLogs.map(c => this.normalizeCounsel(c));
+                if (yearSel !== 'ALL') list = list.filter(c => String(c.schoolYear) === yearSel);
+                if (!list.length) { alert('내보낼 상담 기록이 없습니다.'); return; }
+                list.sort((a, b) => String(a.counselDate).localeCompare(String(b.counselDate)));
+
+                const rows = list.map(c => ({
+                    '*상담분류': NEIS.counselCategory,
+                    '*Wee클래스': NEIS.weeClass,
+                    '*대분류': NEIS.mainCategory,
+                    '*중분류': c.midCategory,
+                    '*상담구분': c.counselType,
+                    '*상담인원': c.headcount,
+                    '*학년도': c.schoolYear,
+                    '*상담일자': String(c.counselDate).replace(/-/g, ''),
+                    '학년': c.grade,
+                    '성별': c.gender,
+                    '*상담제목': c.subject,
+                    '*상담내용': c.counselContent,
+                    '*상담시간(시)': c.hours,
+                    '*상담시간(분)': c.minutes,
+                    '*상담사소속': NEIS.counselor,
+                    '*상담매체구분': c.medium
+                }));
+                const ws = XLSX.utils.json_to_sheet(rows, { header: NEIS_HEADERS });
+                ws['!cols'] = NEIS_HEADERS.map(h => ({ wch: h === '*상담내용' ? 70 : h === '*상담제목' ? 30 : 12 }));
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, '입력');
+                XLSX.writeFile(wb, `상담관리_업로드서식_${yearSel === 'ALL' ? '전체' : yearSel + '학년도'}_${todayISO()}.xlsx`);
+                this.showToast(`상담 기록 ${list.length}건을 나이스 서식으로 내려받았습니다.`);
+            },
+
+            /* ---------- 관리자 ---------- */
+            openAdminModal() {
+                $('modal-admin').classList.remove('hidden');
+                $('admin-lock-screen').classList.toggle('hidden', this.isAdminUnlocked);
+                $('admin-unlocked-screen').classList.toggle('hidden', !this.isAdminUnlocked);
+                $('setting-grade').value = this.settings.grade;
+                $('setting-ban').value = this.settings.ban;
+
+                const cur = schoolYearOf(todayISO());
+                const years = new Set([cur, ...this.counselingLogs.map(c => this.normalizeCounsel(c).schoolYear)]);
+                $('export-school-year').innerHTML = [...years].sort((a, b) => b - a)
+                    .map(y => `<option value="${y}">${y}학년도</option>`).join('') + `<option value="ALL">전체</option>`;
+                $('export-school-year').value = String(cur);
+
+                if (!this.isAdminUnlocked) setTimeout(() => $('admin-password-input').focus(), 50);
+                icons();
+            },
+
+            closeAdminModal() { $('modal-admin').classList.add('hidden'); },
+
+            async verifyAdminPassword() {
+                const input = $('admin-password-input').value;
+                const expected = this.settings.adminPwHash || await sha256('1234');
+                if (await sha256(input) === expected) {
+                    this.isAdminUnlocked = true;
+                    $('admin-password-input').value = '';
+                    $('admin-lock-screen').classList.add('hidden');
+                    $('admin-unlocked-screen').classList.remove('hidden');
+                    $('admin-btn-label').textContent = '관리자 (인증됨)';
+                    this.showToast(this.settings.adminPwHash ? '관리자로 인증되었습니다.' : '초기 비밀번호(1234)를 사용 중입니다. 변경을 권장합니다.');
+                    icons();
+                } else {
+                    alert('비밀번호가 올바르지 않습니다.');
+                }
+            },
+
+            lockAdminSession(silent = false) {
+                this.isAdminUnlocked = false;
+                $('admin-lock-screen').classList.remove('hidden');
+                $('admin-unlocked-screen').classList.add('hidden');
+                $('admin-btn-label').textContent = '관리자';
+                if (!silent) this.showToast('관리자 설정이 잠겼습니다.');
+            },
+
+            async changeAdminPassword() {
+                if (!this.isAdminUnlocked) return;
+                const pwd = $('new-pwd-input').value.trim();
+                if (pwd.length < 4) { alert('비밀번호는 4자 이상이어야 합니다.'); return; }
+                try {
+                    await fbFs.setDoc(this.settingsRef(), { adminPwHash: await sha256(pwd) }, { merge: true });
+                    $('new-pwd-input').value = '';
+                    $('pwd-change-box').classList.add('hidden');
+                    this.showToast('관리자 비밀번호가 변경되었습니다.');
+                } catch (e) { this.handleFsError(e, '비밀번호 변경'); }
+            },
+
+            async saveSettings() {
+                if (!this.isAdminUnlocked) return;
+                const grade = parseInt($('setting-grade').value, 10);
+                const ban = parseInt($('setting-ban').value, 10);
+                if (!grade || !ban) { alert('학년과 반을 숫자로 입력하세요.'); return; }
+                try {
+                    await fbFs.setDoc(this.settingsRef(), { grade, ban }, { merge: true });
+                    this.showToast('설정이 저장되었습니다.');
+                } catch (e) { this.handleFsError(e, '설정 저장'); }
+            }
+        };
+
+        /* =========================================================
+         * 5. 시작
+         * ========================================================= */
+        function initUI() {
+            $('counsel-modal-mid').innerHTML = options(NEIS.mids);
+            $('counsel-modal-type').innerHTML = options(NEIS.typesByMid['개인상담']);
+            $('counsel-filter-mid').innerHTML = `<option value="ALL">전체 중분류</option>` + options(NEIS.mids);
+            $('counsel-modal-medium').innerHTML = options(NEIS.media);
+            $('counsel-modal-grade').innerHTML = options(NEIS.grades);
+            $('counsel-modal-gender').innerHTML = options(NEIS.genders);
+            $('counsel-filter-type').innerHTML = `<option value="ALL">전체 상담구분</option>` + options([...new Set(Object.values(NEIS.typesByMid).flat())]);
+            icons();
+            $('admin-password-input').addEventListener('keydown', e => { if (e.key === 'Enter') appState.verifyAdminPassword(); });
+            window.addEventListener('beforeunload', e => {
+                if (appState.behaviorDirty) { e.preventDefault(); e.returnValue = ''; }
+            });
+            window.addEventListener('afterprint', () => document.body.classList.remove('printing'));
+        }
+
+        async function boot() {
+            if (location.protocol === 'file:') {
+                showFatal('파일을 더블클릭해서 열면 Google 로그인이 동작하지 않습니다. http://localhost 또는 배포된 주소(https)로 접속하세요.');
+            }
+            if (typeof XLSX === 'undefined') {
+                showFatal('엑셀 라이브러리를 불러오지 못했습니다. 엑셀 업로드/내보내기가 동작하지 않을 수 있습니다.');
+            }
+            try {
+                [fbApp, fbAuth, fbFs] = await Promise.all([
+                    import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-app.js`),
+                    import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-auth.js`),
+                    import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-firestore.js`)
+                ]);
+            } catch (e) {
+                console.error(e);
+                showFatal('Firebase를 불러오지 못했습니다. 인터넷 연결이나 학교망 차단(gstatic.com) 여부를 확인하세요.');
+                $('login-status').textContent = 'Firebase 연결 실패';
+                return;
+            }
+            try {
+                const app = fbApp.initializeApp(firebaseConfig);
+                auth = fbAuth.getAuth(app);
+                db = fbFs.getFirestore(app);
+            } catch (e) {
+                console.error(e);
+                showFatal('Firebase 설정값이 올바르지 않습니다: ' + e.message);
+                return;
+            }
+            fbAuth.onAuthStateChanged(auth, user => user ? appState.onLogin(user) : appState.onLogout());
+        }
+
+        initUI();
+        boot();
+    </script>
+</body>
+</html>
